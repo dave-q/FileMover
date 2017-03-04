@@ -1,9 +1,11 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 2013
-VisualStudioVersion = 12.0.40629.0
+# Visual Studio 14
+VisualStudioVersion = 14.0.25420.1
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FileMover", "FileMover\FileMover.csproj", "{E477AF67-DE61-4D15-98D6-45BEB1BE9D0D}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FileMoverTests", "FileMoverTests\FileMoverTests.csproj", "{DEA5F622-C385-48E3-BE2A-AE0D2B44BC2E}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -15,6 +17,10 @@ Global
 		{E477AF67-DE61-4D15-98D6-45BEB1BE9D0D}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{E477AF67-DE61-4D15-98D6-45BEB1BE9D0D}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{E477AF67-DE61-4D15-98D6-45BEB1BE9D0D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{DEA5F622-C385-48E3-BE2A-AE0D2B44BC2E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{DEA5F622-C385-48E3-BE2A-AE0D2B44BC2E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{DEA5F622-C385-48E3-BE2A-AE0D2B44BC2E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{DEA5F622-C385-48E3-BE2A-AE0D2B44BC2E}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

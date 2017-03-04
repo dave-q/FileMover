@@ -7,7 +7,7 @@
     <ProjectGuid>{E477AF67-DE61-4D15-98D6-45BEB1BE9D0D}</ProjectGuid>
     <OutputType>Library</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>FileMoverWithUpdate</RootNamespace>
+    <RootNamespace>FileMover</RootNamespace>
     <AssemblyName>FileMover</AssemblyName>
     <TargetFrameworkVersion>v4.5.2</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
@@ -43,8 +43,9 @@
     <Compile Include="ActionOutCome.cs" />
     <Compile Include="FileMoveEventArgs.cs" />
     <Compile Include="FileMover.cs" />
-    <Compile Include="ICancellable.cs" />
+    <Compile Include="ICancelled.cs" />
     <Compile Include="IFileMover.cs" />
+    <Compile Include="IProgressFileMover.cs" />
     <Compile Include="PInvokeFileMoveX.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>

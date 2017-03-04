@@ -2,129 +2,20 @@
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace FileMoverWithUpdate
+namespace FileMover
 {
-    
-    internal class PInvokeFileMoveX
+
+    internal class PInvokeFileMoveX : IProgressFileMover
     {
-        bool _cancelled;
-        Action<FileMoveEventArgs> ProgressCallback { get; set; }
-        string DestinationPath { get; private set; }
-        string SourcePath { get; private set; }
-
-        public PInvokeFileMoveX(string sourcePath, string destinationPath, Action<FileMoveEventArgs> progressCallback)
-        {
-            this.DestinationPath = destinationPath;
-            this.SourcePath = sourcePath;
-            this.ProgressCallback = progressCallback;
-            InitialiseCopyProgressRoutine();
-        }
-
-        private void InitialiseCopyProgressRoutine()
-        {
-            CopyProgressFunc =
-            (
-                TotalFileSize,
-                TotalBytesTransferred,
-                StreamSize, 
-                StreamBytesTransferred,
-                notUsed,
-                CallbackReason,
-                sourceFileHandle,
-                destinationFileHandle,
-                notUsed2
-            ) =>
-            {
-                var progressResult = CopyProgressResult.PROGRESS_CONTINUE;
-                if (CallbackReason == CopyProgressCallbackReason.CALLBACK_CHUNK_FINISHED)
-                {
-                    var progress = CalculateProgress(TotalFileSize, TotalBytesTransferred);
-                    var fileMoveEventArgs = new FileMoveEventArgs(progress);
-                    ProgressCallback(fileMoveEventArgs);
-
-                    if (fileMoveEventArgs.Cancelled)
-                    {
-                        progressResult = CopyProgressResult.PROGRESS_CANCEL;
-                        _cancelled = true;
-                    }
-                   
-                }
-                return progressResult;
-            };
-        }
-        
-        delegate CopyProgressResult CopyProgressRoutine(long TotalFileSize, long TotalBytesTransferred, long StreamSize, long StreamBytesTransferred, uint notUsed, CopyProgressCallbackReason CallbackReason, IntPtr sourceFileHandle, IntPtr destinationFileHandle, IntPtr notUsed2);
-
-        internal async Task<bool> MoveFile()
-        {
-            var success = await Task.Run<Tuple<bool,int>>(() =>
-            {
-                var _success =  MoveFileWithProgress(SourcePath,
-                    DestinationPath,
-                    new CopyProgressRoutine(CopyProgressFunc),
-                    IntPtr.Zero,
-                    MoveFileFlags.MOVE_FILE_COPY_ALLOWED | MoveFileFlags.MOVE_FILE_REPLACE_EXISTSING | MoveFileFlags.MOVE_FILE_WRITE_THROUGH);
-
-                var errorCode = Marshal.GetLastWin32Error();
-
-                return new Tuple<bool, int>(_success, errorCode);
-            });
-
-            if (!success.Item1)
-            {
-                if (success.Item2 == CANCELLED_ERROR_CODE) //ie it failed because the user cancelled the execution we dont to thrown an exception
-                {
-                    var lastErrorCode = success.Item2;
-                    Debug.WriteLine(lastErrorCode);
-                    var cancelledEventArgs = new FileMoveEventArgs(0M);
-                    ProgressCallback(cancelledEventArgs);
-                }
-                else
-                {
-                    var failedEventArgs = new FileMoveEventArgs(0M);
-                    ProgressCallback(failedEventArgs);
-                    throw new Win32Exception(success.Item2);
-                }
-            }
-            else
-            {
-                //doing this as small files, never get called back from the Win32 method and hence the progress is never updated, so this is make sure 100% is returned once it is complete
-                var completeEventArgs = new FileMoveEventArgs(100M);
-                ProgressCallback(completeEventArgs);
-            }
-            return success.Item1;
-            
-        }
-
-        [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Auto)]
-        static extern bool MoveFileWithProgress(
-            string existingFileName, 
-            string newFileName,
-            CopyProgressRoutine progressRoutine, 
-            IntPtr notNeeded, 
-            MoveFileFlags CopyFlags);
-
-        CopyProgressRoutine CopyProgressFunc;
-
-        private decimal CalculateProgress(long totalSize, long transferredSize)
-        {
-            decimal progress = 0;
-            if (totalSize > 0)
-            {
-                progress = ((decimal)transferredSize / (decimal)totalSize) * 100;
-            }
-            return progress;
-        }
-
-
-        const int CANCELLED_ERROR_CODE = 1235;
-
-
+        /// <summary>
+        /// Describes the action that should be taken once control is returned back to FileMoveX in Win32Dll method after the update progress has been called
+        /// </summary>
         enum CopyProgressResult : uint
         {
             PROGRESS_CONTINUE = 0,
@@ -133,12 +24,18 @@ namespace FileMoverWithUpdate
             PROGRESS_QUIET = 3
         }
 
+        /// <summary>
+        /// The reason the callback was called from the FileMoveX method
+        /// </summary>
         enum CopyProgressCallbackReason : uint
         {
             CALLBACK_CHUNK_FINISHED = 0x00000000,
             CALLBACK_STREAM_SWITCH = 0x00000001
         }
 
+        /// <summary>
+        /// Move Flags required for interaction with Win32 method
+        /// </summary>
         [Flags]
         enum MoveFileFlags : uint
         {
@@ -149,5 +46,178 @@ namespace FileMoverWithUpdate
             MOVE_FILE_CREATE_HARDLINK = 0x00000010,
             MOVE_FILE_FAIL_IF_NOT_TRACKABLE = 0x00000020
         }
+
+        /// <summary>
+        /// The error code returned when the method is cancelled
+        /// </summary>
+        const int CANCELLED_ERROR_CODE = 1235;
+
+        /// <summary>
+        /// A method that is provider by the creator of the class and is called during the call back from the win32 method
+        /// </summary>
+        Action<FileMoveEventArgs> ProgressCallback { get; set; }
+
+        private long _totalFileSize = 0;
+
+        /// <summary>
+        /// A delegate type that describes the method signature required by the win32 FileMoveX 
+        /// for a method to be used a call back from the unmanged code back into here, our managed code
+        /// </summary>
+        /// <param name="TotalFileSize"></param>
+        /// <param name="TotalBytesTransferred"></param>
+        /// <param name="StreamSize"></param>
+        /// <param name="StreamBytesTransferred"></param>
+        /// <param name="notUsed"></param>
+        /// <param name="CallbackReason"></param>
+        /// <param name="sourceFileHandle"></param>
+        /// <param name="destinationFileHandle"></param>
+        /// <param name="notUsed2"></param>
+        /// <returns></returns>
+        delegate CopyProgressResult CopyProgressRoutine(long TotalFileSize, long TotalBytesTransferred, long StreamSize, long StreamBytesTransferred, uint notUsed, CopyProgressCallbackReason CallbackReason, IntPtr sourceFileHandle, IntPtr destinationFileHandle, IntPtr notUsed2);
+
+        internal PInvokeFileMoveX() { }
+
+        /// <summary>
+        /// Moves a file from the source path to the destination path, calling hte progress callback to update the progress and check if it should cancel the move
+        /// </summary>
+        /// <param name="sourcePath"></param>
+        /// <param name="destinationPath"></param>
+        /// <param name="progressCallback">A method to be called to update progress and also set cancelled on the event args if the move should be cancelled</param>
+        /// <returns></returns>
+        /// <exception cref="ArgumentException">If source or destination path is null or empty</exception>
+        /// <exception cref="ArgumentException">If progressCallback is null</exception>
+        public async Task<bool> MoveFile(string sourcePath, string destinationPath, Action<FileMoveEventArgs> progressCallback)
+        {
+            if (string.IsNullOrWhiteSpace(sourcePath)) throw new ArgumentException("sourcePath cannot be null or empty");
+            if (string.IsNullOrWhiteSpace(destinationPath)) throw new ArgumentException("destinationPath cannot be null or empty");
+            if (progressCallback == null) throw new ArgumentNullException("progressCallback");
+
+            ProgressCallback = progressCallback;
+
+            _totalFileSize = new FileInfo(sourcePath).Length;
+
+            Tuple<bool, int> success = await StartFileMove(sourcePath, destinationPath);
+            HandleResult(sourcePath, success);
+            return success.Item1;
+        }
+
+        /// <summary>
+        /// Begins the FileMove process
+        /// </summary>
+        /// <param name="sourcePath"></param>
+        /// <param name="destinationPath"></param>
+        /// <returns></returns>
+        private async Task<Tuple<bool, int>> StartFileMove(string sourcePath, string destinationPath)
+        {
+            return await Task.Run(() =>
+            {
+                var _success = MoveFileWithProgress(sourcePath,
+                    destinationPath,
+                    new CopyProgressRoutine(CopyProgressFunc),
+                    IntPtr.Zero,
+                    MoveFileFlags.MOVE_FILE_COPY_ALLOWED | MoveFileFlags.MOVE_FILE_REPLACE_EXISTSING | MoveFileFlags.MOVE_FILE_WRITE_THROUGH);
+
+                var errorCode = Marshal.GetLastWin32Error();
+
+                return new Tuple<bool, int>(_success, errorCode);
+            });
+        }
+
+        /// <summary>
+        /// Handles the the returned boolean of the win32 method, along with the processing of the LastWin32 error if it failed
+        /// </summary>
+        /// <param name="sourcePath"></param>
+        /// <param name="success"></param>
+        private void HandleResult(string sourcePath, Tuple<bool, int> success)
+        {
+            FileMoveEventArgs moveEventArgs;
+            if (!success.Item1)
+            {
+                moveEventArgs = HandleFailed(success, _totalFileSize);
+            }
+            else
+            {
+                //doing this as small files, never get called back from the Win32 method and hence the progress is never updated, so this is make sure 100% is returned once it is complete
+                moveEventArgs = new FileMoveEventArgs(_totalFileSize, _totalFileSize);
+            }
+            ProgressCallback(moveEventArgs);
+        }
+
+        /// <summary>
+        /// Handle a non success
+        /// </summary>
+        /// <param name="success"></param>
+        /// <param name="fileSize"></param>
+        /// <returns></returns>
+        private FileMoveEventArgs HandleFailed(Tuple<bool, int> success, long fileSize)
+        {
+            if (success.Item2 == CANCELLED_ERROR_CODE) //ie it failed because the user cancelled the execution we dont to thrown an exception
+            {
+                return new FileMoveEventArgs(fileSize, 0);
+            }
+            else
+            {
+                throw new Win32Exception(success.Item2);
+            }
+        }
+
+        /// <summary>
+        /// A function that can be used as CopyProgressRoutine delegate and is passed into the win32 method
+        /// </summary>
+        /// <param name="TotalFileSize"></param>
+        /// <param name="TotalBytesTransferred"></param>
+        /// <param name="StreamSize"></param>
+        /// <param name="StreamBytesTransferred"></param>
+        /// <param name="notUsed"></param>
+        /// <param name="CallbackReason"></param>
+        /// <param name="sourceFileHandle"></param>
+        /// <param name="destinationFileHandle"></param>
+        /// <param name="notUsed2"></param>
+        /// <returns></returns>
+        private CopyProgressResult CopyProgressFunc(
+                long TotalFileSize,
+                long TotalBytesTransferred,
+                long StreamSize,
+                long StreamBytesTransferred,
+                uint notUsed,
+                CopyProgressCallbackReason CallbackReason,
+                IntPtr sourceFileHandle,
+                IntPtr destinationFileHandle,
+                IntPtr notUsed2
+            )
+        {
+            _totalFileSize = TotalFileSize;
+            var progressResult = CopyProgressResult.PROGRESS_CONTINUE;
+            if (CallbackReason == CopyProgressCallbackReason.CALLBACK_CHUNK_FINISHED)
+            {
+                var fileMoveEventArgs = new FileMoveEventArgs(TotalFileSize, TotalBytesTransferred);
+                ProgressCallback(fileMoveEventArgs);
+
+                if (fileMoveEventArgs.Cancelled)
+                {
+                    progressResult = CopyProgressResult.PROGRESS_CANCEL;
+                }
+
+            }
+            return progressResult;
+        }
+
+        /// <summary>
+        /// the signature of the method in the unmanaged code we will be calling into
+        /// </summary>
+        /// <param name="existingFileName"></param>
+        /// <param name="newFileName"></param>
+        /// <param name="progressRoutine"></param>
+        /// <param name="notNeeded"></param>
+        /// <param name="CopyFlags"></param>
+        /// <returns></returns>
+        [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Auto)]
+        static extern bool MoveFileWithProgress(
+            string existingFileName,
+            string newFileName,
+            CopyProgressRoutine progressRoutine,
+            IntPtr notNeeded,
+            MoveFileFlags CopyFlags);
+
     }
 }

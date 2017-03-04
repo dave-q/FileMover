@@ -4,17 +4,17 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace FileMoverWithUpdate
+namespace FileMover
 {
     internal class FileMoveEventArgs : EventArgs
     {
-        internal FileMoveEventArgs(ulong totalBytes, ulong transferredBytes)
+        internal FileMoveEventArgs(long totalBytes, long transferredBytes)
         {
             TransferredBytes = transferredBytes;
             TotalBytes = totalBytes;
         }
-        internal ulong TransferredBytes {get; private set;}
-        internal ulong TotalBytes { get; private set; }
+        internal long TransferredBytes {get; private set;}
+        internal long TotalBytes { get; private set; }
 
         internal bool Cancelled { get; set; }
     }
