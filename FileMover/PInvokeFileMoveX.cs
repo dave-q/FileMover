@@ -55,7 +55,7 @@ namespace FileMover
         /// <summary>
         /// A method that is provider by the creator of the class and is called during the call back from the win32 method
         /// </summary>
-        Action<FileMoveEventArgs> ProgressCallback { get; set; }
+        Action<FileMoveProgressArgs> ProgressCallback { get; set; }
 
         private long _totalFileSize = 0;
 
@@ -86,7 +86,7 @@ namespace FileMover
         /// <returns></returns>
         /// <exception cref="ArgumentException">If source or destination path is null or empty</exception>
         /// <exception cref="ArgumentException">If progressCallback is null</exception>
-        public async Task<bool> MoveFile(string sourcePath, string destinationPath, Action<FileMoveEventArgs> progressCallback)
+        public async Task<bool> MoveFile(string sourcePath, string destinationPath, Action<FileMoveProgressArgs> progressCallback)
         {
             if (string.IsNullOrWhiteSpace(sourcePath)) throw new ArgumentException("sourcePath cannot be null or empty");
             if (string.IsNullOrWhiteSpace(destinationPath)) throw new ArgumentException("destinationPath cannot be null or empty");
@@ -130,7 +130,7 @@ namespace FileMover
         /// <param name="success"></param>
         private void HandleResult(string sourcePath, Tuple<bool, int> success)
         {
-            FileMoveEventArgs moveEventArgs;
+            FileMoveProgressArgs moveEventArgs;
             if (!success.Item1)
             {
                 moveEventArgs = HandleFailed(success, _totalFileSize);
@@ -138,7 +138,7 @@ namespace FileMover
             else
             {
                 //doing this as small files, never get called back from the Win32 method and hence the progress is never updated, so this is make sure 100% is returned once it is complete
-                moveEventArgs = new FileMoveEventArgs(_totalFileSize, _totalFileSize);
+                moveEventArgs = new FileMoveProgressArgs(_totalFileSize, _totalFileSize);
             }
             ProgressCallback(moveEventArgs);
         }
@@ -149,11 +149,11 @@ namespace FileMover
         /// <param name="success"></param>
         /// <param name="fileSize"></param>
         /// <returns></returns>
-        private FileMoveEventArgs HandleFailed(Tuple<bool, int> success, long fileSize)
+        private FileMoveProgressArgs HandleFailed(Tuple<bool, int> success, long fileSize)
         {
             if (success.Item2 == CANCELLED_ERROR_CODE) //ie it failed because the user cancelled the execution we dont to thrown an exception
             {
-                return new FileMoveEventArgs(fileSize, 0);
+                return new FileMoveProgressArgs(fileSize, 0);
             }
             else
             {
@@ -186,11 +186,13 @@ namespace FileMover
                 IntPtr notUsed2
             )
         {
+            var streamSize = StreamSize;
+            var streamBytesTrans = StreamBytesTransferred;
             _totalFileSize = TotalFileSize;
             var progressResult = CopyProgressResult.PROGRESS_CONTINUE;
             if (CallbackReason == CopyProgressCallbackReason.CALLBACK_CHUNK_FINISHED)
             {
-                var fileMoveEventArgs = new FileMoveEventArgs(TotalFileSize, TotalBytesTransferred);
+                var fileMoveEventArgs = new FileMoveProgressArgs(TotalFileSize, TotalBytesTransferred);
                 ProgressCallback(fileMoveEventArgs);
 
                 if (fileMoveEventArgs.Cancelled)

@@ -8,6 +8,6 @@ namespace FileMover
 {
     internal interface IProgressFileMover
     {
-        Task<bool> MoveFile(string sourcePath, string destinationPath, Action<FileMoveEventArgs> progressUpdateCallback);
+        Task<bool> MoveFile(string sourcePath, string destinationPath, Action<FileMoveProgressArgs> progressUpdateCallback);
     }
 }

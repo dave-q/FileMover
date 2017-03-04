@@ -40,7 +40,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="ActionOutCome.cs" />
+    <Compile Include="Outcome.cs" />
     <Compile Include="FileMoveEventArgs.cs" />
     <Compile Include="FileMover.cs" />
     <Compile Include="ICancelled.cs" />

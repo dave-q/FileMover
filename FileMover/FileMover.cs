@@ -29,7 +29,7 @@ namespace FileMover
         /// <exception cref="ArgumentException">If the source file path or destination file path is null or empty</exception>
         /// <exception cref="FileNotFoundException">If the source file cannot be found</exception>
         /// <exception cref="InvalidOperationException">If the destination file exists and cref="overWritreExisting" is set to false</exception>
-        public static Task<bool>Move(string sourcePath, string destinationPath, Action<long, long> progressupdater = null, ICancelled cancelledNotifier = null, bool overwriteExisting = true)
+        public static Task<bool>MoveAsync(string sourcePath, string destinationPath, Action<long, long> progressupdater = null, ICancelled cancelledNotifier = null, bool overwriteExisting = true)
         {
             if (string.IsNullOrWhiteSpace(sourcePath)) throw new ArgumentException("sourcePath cannot be null or empty");
             if (string.IsNullOrWhiteSpace(destinationPath)) throw new ArgumentException("destinationPath cannot be null or empty");
@@ -74,7 +74,7 @@ namespace FileMover
         
         public bool IsMoving { get; private set; }
 
-        internal void ProgressCallback(FileMoveEventArgs fileMoveEventArgs)
+        internal void ProgressCallback(FileMoveProgressArgs fileMoveEventArgs)
         {
             ProgressUpdater(fileMoveEventArgs.TotalBytes, fileMoveEventArgs.TransferredBytes);
             if(_cancelledNotifier != null && _cancelledNotifier.IsCancelled)

@@ -6,9 +6,9 @@ using System.Threading.Tasks;
 
 namespace FileMover
 {
-    internal class ActionOutCome
+    internal class Outcome
     {
-        internal ActionOutCome(bool success, string message, object dataObject = null)
+        internal Outcome(bool success, string message, object dataObject = null)
         {
             Message = message;
             Success = success;

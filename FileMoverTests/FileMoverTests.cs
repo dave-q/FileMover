@@ -19,7 +19,7 @@ namespace FileMoverTests
             var destPath = TestFilePath;
 
             Mock<IProgressFileMover> mockMover = new Mock<IProgressFileMover>();
-            mockMover.Setup(mover => mover.MoveFile(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<Action<FileMoveEventArgs>>())).Returns(async () => { await Task.Delay(1000); return true; });
+            mockMover.Setup(mover => mover.MoveFile(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<Action<FileMoveProgressArgs>>())).Returns(async () => { await Task.Delay(1000); return true; });
 
 
             Mock<ICancelled> mockCancelled = new Mock<ICancelled>();
@@ -42,7 +42,7 @@ namespace FileMoverTests
 
             var fileMover = new FileMoverInternal(new Mock<IProgressFileMover>().Object, "source", "dest",ProgressUpdater, _mockCancelledNotifier.Object);
 
-            var fileMoverEventArgs = new FileMoveEventArgs(1, 1);
+            var fileMoverEventArgs = new FileMoveProgressArgs(1, 1);
 
             fileMover.ProgressCallback(fileMoverEventArgs);
 
@@ -67,7 +67,7 @@ namespace FileMoverTests
 
             var fileMover = new FileMoverInternal(new Mock<IProgressFileMover>().Object, "source", "dest", _progressUpdated, _mockCancelledNotifier.Object);
 
-            var fileMoverEventArgs = new FileMoveEventArgs(100, 50);
+            var fileMoverEventArgs = new FileMoveProgressArgs(100, 50);
 
             fileMover.ProgressCallback(fileMoverEventArgs);
 
@@ -121,7 +121,7 @@ namespace FileMoverTests
             var destPath = TestFilePath;
 
             Mock<IProgressFileMover> _mockMover = new Mock<IProgressFileMover>();
-            _mockMover.Setup(mover => mover.MoveFile(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<Action<FileMoveEventArgs>>())).ReturnsAsync(true);
+            _mockMover.Setup(mover => mover.MoveFile(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<Action<FileMoveProgressArgs>>())).ReturnsAsync(true);
             Mock<ICancelled> _mockCancelled = new Mock<ICancelled>();
 
             var fileMover = new FileMoverInternal(_mockMover.Object, sourcePath, destPath, ProgressUpdater, _mockCancelled.Object, true);
@@ -135,7 +135,7 @@ namespace FileMoverTests
         public async Task DoAFileMove()
         {
             CreateTestFile();
-            var result = await FileWithProgress.Move(TestFilePath, TestDestinationPath, ProgressUpdater);
+            var result = await FileWithProgress.MoveAsync(TestFilePath, TestDestinationPath, ProgressUpdater);
 
             Assert.IsTrue(result);
 
