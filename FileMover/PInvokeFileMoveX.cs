@@ -11,7 +11,7 @@ using System.Threading.Tasks;
 namespace FileMover
 {
 
-    internal class PInvokeFileMoveX : IProgressFileMover
+    internal class PInvokeFileX : IProgressFileMover
     {
         /// <summary>
         /// Describes the action that should be taken once control is returned back to FileMoveX in Win32Dll method after the update progress has been called
@@ -47,6 +47,17 @@ namespace FileMover
             MOVE_FILE_FAIL_IF_NOT_TRACKABLE = 0x00000020
         }
 
+        [Flags]
+        enum CopyFileFlags
+        {
+            COPY_FILE_ALLOW_DECRYPTED_DESTINATION = 0x00000008,
+            COPY_FILE_COPY_SYMLINK = 0x00000800,
+            COPY_FILE_FAIL_IF_EXISTS = 0x00000001,
+            COPY_FILE_NO_BUFFERING = 0x00001000,
+            COPY_FILE_OPEN_SOURCE_FOR_WRITE = 0x00000004,
+            COPY_FILE_RESTARTABLE = 0x00000002
+        }
+
         /// <summary>
         /// The error code returned when the method is cancelled
         /// </summary>
@@ -73,9 +84,18 @@ namespace FileMover
         /// <param name="destinationFileHandle"></param>
         /// <param name="notUsed2"></param>
         /// <returns></returns>
-        delegate CopyProgressResult CopyProgressRoutine(long TotalFileSize, long TotalBytesTransferred, long StreamSize, long StreamBytesTransferred, uint notUsed, CopyProgressCallbackReason CallbackReason, IntPtr sourceFileHandle, IntPtr destinationFileHandle, IntPtr notUsed2);
+        delegate CopyProgressResult CopyProgressRoutine(
+            long TotalFileSize, 
+            long TotalBytesTransferred, 
+            long StreamSize, 
+            long StreamBytesTransferred, 
+            uint notUsed, 
+            CopyProgressCallbackReason CallbackReason, 
+            IntPtr sourceFileHandle, 
+            IntPtr destinationFileHandle, 
+            IntPtr notUsed2);
 
-        internal PInvokeFileMoveX() { }
+        internal PInvokeFileX() { }
 
         /// <summary>
         /// Moves a file from the source path to the destination path, calling hte progress callback to update the progress and check if it should cancel the move
@@ -86,7 +106,7 @@ namespace FileMover
         /// <returns></returns>
         /// <exception cref="ArgumentException">If source or destination path is null or empty</exception>
         /// <exception cref="ArgumentException">If progressCallback is null</exception>
-        public async Task<bool> MoveFile(string sourcePath, string destinationPath, Action<FileMoveProgressArgs> progressCallback)
+        public async Task<bool> MoveFile(string sourcePath, string destinationPath, FileMoveType moveType, Action<FileMoveProgressArgs> progressCallback)
         {
             if (string.IsNullOrWhiteSpace(sourcePath)) throw new ArgumentException("sourcePath cannot be null or empty");
             if (string.IsNullOrWhiteSpace(destinationPath)) throw new ArgumentException("destinationPath cannot be null or empty");
@@ -96,10 +116,24 @@ namespace FileMover
 
             _totalFileSize = new FileInfo(sourcePath).Length;
 
-            Tuple<bool, int> success = await StartFileMove(sourcePath, destinationPath);
+            Tuple<bool, int> success;
+
+            switch (moveType)
+            {
+                case FileMoveType.Move:
+                    success = await StartFileMove(sourcePath, destinationPath);
+                    break;
+                case FileMoveType.Copy:
+                    success = await StartFileCopy(sourcePath, destinationPath);
+                    break;
+                default:
+                    throw new NotImplementedException($"File Move Type not implemenented. {moveType.ToString()}");
+            }
+
             HandleResult(sourcePath, success);
             return success.Item1;
         }
+
 
         /// <summary>
         /// Begins the FileMove process
@@ -119,6 +153,22 @@ namespace FileMover
 
                 var errorCode = Marshal.GetLastWin32Error();
 
+                return new Tuple<bool, int>(_success, errorCode);
+            });
+        }
+
+        private async Task<Tuple<bool,int>> StartFileCopy(string sourcePath, string destinationPath)
+        {
+            return await Task.Run(() =>
+            {
+                var _success = CopyFileEx(sourcePath,
+                    destinationPath,
+                    new CopyProgressRoutine(CopyProgressFunc),
+                    IntPtr.Zero,
+                    false,
+                    CopyFileFlags.COPY_FILE_ALLOW_DECRYPTED_DESTINATION | CopyFileFlags.COPY_FILE_COPY_SYMLINK);
+
+                var errorCode = Marshal.GetLastWin32Error();
                 return new Tuple<bool, int>(_success, errorCode);
             });
         }
@@ -216,10 +266,19 @@ namespace FileMover
         [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Auto)]
         static extern bool MoveFileWithProgress(
             string existingFileName,
-            string newFileName,
+            string destinationFileName,
             CopyProgressRoutine progressRoutine,
             IntPtr notNeeded,
             MoveFileFlags CopyFlags);
+
+        [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Auto)]
+        static extern bool CopyFileEx(
+            string existingFileName,
+            string destinationFileName,
+            CopyProgressRoutine progressRoutine,
+            IntPtr notNeeded,
+            bool cancelled,
+            CopyFileFlags CopyFlags);
 
     }
 }

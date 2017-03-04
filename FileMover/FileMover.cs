@@ -23,22 +23,40 @@ namespace FileMover
         /// </summary>
         /// <param name="sourcePath">The path of the source file</param>
         /// <param name="destinationPath">The path of where the file will be transferred to</param>
-        /// <param name="progressupdater" >A method to be called to update on the progress of the file moving process</param>
+        /// <param name="progressUpdater" >A method to be called to update on the progress of the file moving process</param>
         /// <param name="cancelledNotifier">an object that be checked to see if the process should be cancelled</param>
         /// <param name="overwriteExisting">a boolean value describing what should be done if the destination file path already exists</param>
         /// <exception cref="ArgumentException">If the source file path or destination file path is null or empty</exception>
         /// <exception cref="FileNotFoundException">If the source file cannot be found</exception>
         /// <exception cref="InvalidOperationException">If the destination file exists and cref="overWritreExisting" is set to false</exception>
-        public static Task<bool>MoveAsync(string sourcePath, string destinationPath, Action<long, long> progressupdater = null, ICancelled cancelledNotifier = null, bool overwriteExisting = true)
+        public static Task<bool>MoveAsync(string sourcePath, string destinationPath, Action<long, long> progressUpdater = null, ICancelled cancelledNotifier = null, bool overwriteExisting = true)
+        {
+            FileMoverInternal filemover = CreateAndValidate(sourcePath, destinationPath, progressUpdater, cancelledNotifier);
+
+
+            return filemover.MoveAsync(FileMoveType.Move);
+        }
+
+        public static Task<bool>CopyAsync(string sourcePath, string destinationPath, Action<long,long> progressUpdater = null, ICancelled cancelledNotifier = null, bool overwriteExisting = true)
+        {
+            FileMoverInternal filemover = CreateAndValidate(sourcePath, destinationPath, progressUpdater, cancelledNotifier);
+
+            return filemover.MoveAsync(FileMoveType.Copy);
+        }
+
+        private static FileMoverInternal CreateAndValidate(string sourcePath, string destinationPath, Action<long, long> progressUpdater, ICancelled cancelledNotifier)
         {
             if (string.IsNullOrWhiteSpace(sourcePath)) throw new ArgumentException("sourcePath cannot be null or empty");
             if (string.IsNullOrWhiteSpace(destinationPath)) throw new ArgumentException("destinationPath cannot be null or empty");
-            var filemover = new FileMoverInternal(new PInvokeFileMoveX(),sourcePath, destinationPath, progressupdater, cancelledNotifier);
-
-            return filemover.MoveAsync();
+            var filemover = new FileMoverInternal(new PInvokeFileX(), sourcePath, destinationPath, progressUpdater, cancelledNotifier);
+            return filemover;
         }
+    }
 
-
+    internal enum FileMoveType
+    {
+        Move,
+        Copy
     }
 
     internal class FileMoverInternal
@@ -83,7 +101,7 @@ namespace FileMover
             }
         }
 
-        internal async Task<bool> MoveAsync()
+        internal async Task<bool> MoveAsync(FileMoveType moveType)
         {
             if (ValidatePaths() && !IsMoving)
             {
@@ -91,13 +109,7 @@ namespace FileMover
                 IsMoving = true;
                 try
                 {
-                    var result = await _progressFileMover.MoveFile(_sourcePath, _destinationPath, ProgressCallback);
-                    return result;
-
-                }
-                //ToDo Catch more exceptions
-                catch (Exception x)
-                {
+                    return await _progressFileMover.MoveFile(_sourcePath, _destinationPath, moveType, ProgressCallback);
                 }
                 finally
                 {
