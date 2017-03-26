@@ -42,7 +42,6 @@
   <ItemGroup>
     <Compile Include="FileMoveEventArgs.cs" />
     <Compile Include="FileMover.cs" />
-    <Compile Include="ICancelled.cs" />
     <Compile Include="IFileMover.cs" />
     <Compile Include="IProgressFileMover.cs" />
     <Compile Include="PInvokeFileMoveX.cs" />

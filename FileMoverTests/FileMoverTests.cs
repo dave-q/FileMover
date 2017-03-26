@@ -11,6 +11,8 @@ namespace FileMoverTests
     [TestClass]
     public class FileMoverTests
     {
+        public bool IsCancelled { get; private set; }
+
         [TestMethod]
         public async Task FileMoverSetsIsMoving()
         {
@@ -21,10 +23,7 @@ namespace FileMoverTests
             Mock<IProgressFileMover> mockMover = new Mock<IProgressFileMover>();
             mockMover.Setup(mover => mover.MoveFile(It.IsAny<string>(), It.IsAny<string>(), FileMoveType.Move, It.IsAny<Action<FileMoveProgressArgs>>())).Returns(async () => { await Task.Delay(1000); return true; });
 
-
-            Mock<ICancelled> mockCancelled = new Mock<ICancelled>();
-
-            var filemover = new FileMoverInternal(mockMover.Object, sourcePath, destPath, ProgressUpdater, mockCancelled.Object);
+            var filemover = new FileMoverInternal(mockMover.Object, sourcePath, destPath, ProgressUpdater);
 
             var result = filemover.MoveAsync(FileMoveType.Move);
 
@@ -37,35 +36,30 @@ namespace FileMoverTests
         [TestMethod]
         public void FileMoverCancelSetsCancelOnEventArgs()
         {
-            var _mockCancelledNotifier = new Mock<ICancelled>();
-            _mockCancelledNotifier.SetupGet(canc => canc.IsCancelled).Returns(true);
-
-            var fileMover = new FileMoverInternal(new Mock<IProgressFileMover>().Object, "source", "dest",ProgressUpdater, _mockCancelledNotifier.Object);
+            this.IsCancelled = true;
+            var fileMover = new FileMoverInternal(new Mock<IProgressFileMover>().Object, "source", "dest",ProgressUpdater);
 
             var fileMoverEventArgs = new FileMoveProgressArgs(1, 1);
 
             fileMover.ProgressCallback(fileMoverEventArgs);
-
+            this.IsCancelled = false;
             Assert.IsTrue(fileMoverEventArgs.Cancelled);
         }
 
         [TestMethod]
         public void FileMoverUpdatesProgressUpdater()
         {
-            var _mockCancelledNotifier = new Mock<ICancelled>();
-
-            _mockCancelledNotifier.SetupAllProperties();
-
             var totalBytes = 0L;
             var transferredBytes = 0L;
 
-            Action<long, long> _progressUpdated = (long _totalBytes, long _transferredBytes) =>
+            Func<long, long, bool> _progressUpdated = (long _totalBytes, long _transferredBytes) =>
             {
                 totalBytes = _totalBytes;
                 transferredBytes = _transferredBytes;
+                return false;
             };
 
-            var fileMover = new FileMoverInternal(new Mock<IProgressFileMover>().Object, "source", "dest", _progressUpdated, _mockCancelledNotifier.Object);
+            var fileMover = new FileMoverInternal(new Mock<IProgressFileMover>().Object, "source", "dest", _progressUpdated);
 
             var fileMoverEventArgs = new FileMoveProgressArgs(100, 50);
 
@@ -75,9 +69,10 @@ namespace FileMoverTests
             Assert.AreEqual(50, transferredBytes);
         }
 
-        public void ProgressUpdater(long totalBytes, long transferredBytes)
+        public bool ProgressUpdater(long totalBytes, long transferredBytes)
         {
             var percent = transferredBytes / totalBytes * 100;
+            return this.IsCancelled;
         }
 
         [TestMethod]
@@ -89,9 +84,8 @@ namespace FileMoverTests
             var destPath = TestFilePath;
 
             Mock<IProgressFileMover> _mockMover = new Mock<IProgressFileMover>();
-            Mock<ICancelled> _mockCancelled = new Mock<ICancelled>();
 
-            var fileMover = new FileMoverInternal(_mockMover.Object, sourcePath, destPath, ProgressUpdater, _mockCancelled.Object, false);
+            var fileMover = new FileMoverInternal(_mockMover.Object, sourcePath, destPath, ProgressUpdater, false);
 
             var result = await fileMover.MoveAsync(FileMoveType.Move);
             
@@ -106,13 +100,13 @@ namespace FileMoverTests
             var destPath = TestFilePath;
 
             Mock<IProgressFileMover> _mockMover = new Mock<IProgressFileMover>();
-            Mock<ICancelled> _mockCancelled = new Mock<ICancelled>();
 
-            var fileMover = new FileMoverInternal(_mockMover.Object, sourcePath, destPath, ProgressUpdater, _mockCancelled.Object, false);
+            var fileMover = new FileMoverInternal(_mockMover.Object, sourcePath, destPath, ProgressUpdater, false);
 
             var result = await fileMover.MoveAsync(FileMoveType.Move);
         }
 
+        
         [TestMethod]
         public async Task FileMovePassesIfDestExistsAndOverwriteIsTrue()
         {
@@ -122,9 +116,9 @@ namespace FileMoverTests
 
             Mock<IProgressFileMover> _mockMover = new Mock<IProgressFileMover>();
             _mockMover.Setup(mover => mover.MoveFile(It.IsAny<string>(), It.IsAny<string>(), FileMoveType.Move, It.IsAny<Action<FileMoveProgressArgs>>())).ReturnsAsync(true);
-            Mock<ICancelled> _mockCancelled = new Mock<ICancelled>();
+            
 
-            var fileMover = new FileMoverInternal(_mockMover.Object, sourcePath, destPath, ProgressUpdater, _mockCancelled.Object, true);
+            var fileMover = new FileMoverInternal(_mockMover.Object, sourcePath, destPath, ProgressUpdater, true);
 
             var result = await fileMover.MoveAsync(FileMoveType.Move);
 
@@ -176,5 +170,6 @@ namespace FileMoverTests
         string TestFilePath = "testFile.txt";
 
         string TestDestinationPath = "DestFile.txt";
+
     }
 }
