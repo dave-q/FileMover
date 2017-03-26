@@ -19,7 +19,8 @@ namespace FileMover
     {
         /// <summary>
         /// Moves the specified file from its source path to its destination path. 
-        /// Calling back to the progress updater to update progress and check the cancelledNotifier as to whether to cancel the transfer
+        /// Calling back to the progress updater to update progress. The progressUpdater should return true if the 
+        /// process should be cancelled
         /// </summary>
         /// <param name="sourcePath">The path of the source file</param>
         /// <param name="destinationPath">The path of where the file will be transferred to</param>
