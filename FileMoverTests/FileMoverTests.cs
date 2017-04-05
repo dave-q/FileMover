@@ -52,11 +52,11 @@ namespace FileMoverTests
             var totalBytes = 0L;
             var transferredBytes = 0L;
 
-            Func<long, long, bool> _progressUpdated = (long _totalBytes, long _transferredBytes) =>
+            Action<FileMoveProgressArgs> _progressUpdated = (FileMoveProgressArgs progressArgs) =>
             {
-                totalBytes = _totalBytes;
-                transferredBytes = _transferredBytes;
-                return false;
+                totalBytes = progressArgs.TotalBytes;
+                transferredBytes = progressArgs.TransferredBytes;
+                progressArgs.Cancelled = false;
             };
 
             var fileMover = new FileMoverInternal(new Mock<IProgressFileMover>().Object, "source", "dest", _progressUpdated);
@@ -69,10 +69,12 @@ namespace FileMoverTests
             Assert.AreEqual(50, transferredBytes);
         }
 
-        public bool ProgressUpdater(long totalBytes, long transferredBytes)
+        public void ProgressUpdater(FileMoveProgressArgs progressArgs)
         {
+            var transferredBytes = progressArgs.TransferredBytes;
+            var totalBytes = progressArgs.TotalBytes;
             var percent = transferredBytes / totalBytes * 100;
-            return this.IsCancelled;
+            progressArgs.Cancelled =  this.IsCancelled;
         }
 
         [TestMethod]
