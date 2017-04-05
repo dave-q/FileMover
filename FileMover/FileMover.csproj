@@ -42,7 +42,9 @@
   <ItemGroup>
     <Compile Include="FileMoveEventArgs.cs" />
     <Compile Include="FileMover.cs" />
+    <Compile Include="FileMoveType.cs" />
     <Compile Include="IFileMover.cs" />
+    <Compile Include="InternalFileMover.cs" />
     <Compile Include="IProgressFileMover.cs" />
     <Compile Include="PInvokeFileMoveX.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
