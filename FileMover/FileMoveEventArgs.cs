@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace FileMover
 {
-    internal class FileMoveProgressArgs
+    public class FileMoveProgressArgs
     {
         internal FileMoveProgressArgs(long totalBytes, long transferredBytes)
         {
