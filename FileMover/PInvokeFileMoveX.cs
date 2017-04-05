@@ -13,50 +13,6 @@ namespace FileMover
 
     internal class PInvokeFileX : IProgressFileMover
     {
-        /// <summary>
-        /// Describes the action that should be taken once control is returned back to FileMoveX in Win32Dll method after the update progress has been called
-        /// </summary>
-        enum CopyProgressResult : uint
-        {
-            PROGRESS_CONTINUE = 0,
-            PROGRESS_CANCEL = 1,
-            PROGRESS_STOP = 2,
-            PROGRESS_QUIET = 3
-        }
-
-        /// <summary>
-        /// The reason the callback was called from the FileMoveX method
-        /// </summary>
-        enum CopyProgressCallbackReason : uint
-        {
-            CALLBACK_CHUNK_FINISHED = 0x00000000,
-            CALLBACK_STREAM_SWITCH = 0x00000001
-        }
-
-        /// <summary>
-        /// Move Flags required for interaction with Win32 method
-        /// </summary>
-        [Flags]
-        enum MoveFileFlags : uint
-        {
-            MOVE_FILE_REPLACE_EXISTSING = 0x00000001,
-            MOVE_FILE_COPY_ALLOWED = 0x00000002,
-            MOVE_FILE_DELAY_UNTIL_REBOOT = 0x00000004,
-            MOVE_FILE_WRITE_THROUGH = 0x00000008,
-            MOVE_FILE_CREATE_HARDLINK = 0x00000010,
-            MOVE_FILE_FAIL_IF_NOT_TRACKABLE = 0x00000020
-        }
-
-        [Flags]
-        enum CopyFileFlags
-        {
-            COPY_FILE_ALLOW_DECRYPTED_DESTINATION = 0x00000008,
-            COPY_FILE_COPY_SYMLINK = 0x00000800,
-            COPY_FILE_FAIL_IF_EXISTS = 0x00000001,
-            COPY_FILE_NO_BUFFERING = 0x00001000,
-            COPY_FILE_OPEN_SOURCE_FOR_WRITE = 0x00000004,
-            COPY_FILE_RESTARTABLE = 0x00000002
-        }
 
         /// <summary>
         /// The error code returned when the method is cancelled
@@ -116,7 +72,7 @@ namespace FileMover
 
             _totalFileSize = new FileInfo(sourcePath).Length;
 
-            Tuple<bool, int> success;
+            SuccessDescriptor success;
 
             switch (moveType)
             {
@@ -131,7 +87,7 @@ namespace FileMover
             }
 
             HandleResult(sourcePath, success);
-            return success.Item1;
+            return success.IsSuccess;
         }
 
 
@@ -141,7 +97,7 @@ namespace FileMover
         /// <param name="sourcePath"></param>
         /// <param name="destinationPath"></param>
         /// <returns></returns>
-        private async Task<Tuple<bool, int>> StartFileMove(string sourcePath, string destinationPath)
+        private async Task<SuccessDescriptor> StartFileMove(string sourcePath, string destinationPath)
         {
             return await Task.Run(() =>
             {
@@ -153,11 +109,11 @@ namespace FileMover
 
                 var errorCode = Marshal.GetLastWin32Error();
 
-                return new Tuple<bool, int>(_success, errorCode);
+                return new SuccessDescriptor(_success, errorCode);
             });
         }
 
-        private async Task<Tuple<bool,int>> StartFileCopy(string sourcePath, string destinationPath)
+        private async Task<SuccessDescriptor> StartFileCopy(string sourcePath, string destinationPath)
         {
             return await Task.Run(() =>
             {
@@ -169,7 +125,7 @@ namespace FileMover
                     CopyFileFlags.COPY_FILE_ALLOW_DECRYPTED_DESTINATION | CopyFileFlags.COPY_FILE_COPY_SYMLINK);
 
                 var errorCode = Marshal.GetLastWin32Error();
-                return new Tuple<bool, int>(_success, errorCode);
+                return new SuccessDescriptor(_success, errorCode);
             });
         }
 
@@ -177,13 +133,13 @@ namespace FileMover
         /// Handles the the returned boolean of the win32 method, along with the processing of the LastWin32 error if it failed
         /// </summary>
         /// <param name="sourcePath"></param>
-        /// <param name="success"></param>
-        private void HandleResult(string sourcePath, Tuple<bool, int> success)
+        /// <param name="sucessDescriptor"></param>
+        private void HandleResult(string sourcePath, SuccessDescriptor sucessDescriptor)
         {
             FileMoveProgressArgs moveEventArgs;
-            if (!success.Item1)
+            if (!sucessDescriptor.IsSuccess)
             {
-                moveEventArgs = HandleFailed(success, _totalFileSize);
+                moveEventArgs = HandleFailed(sucessDescriptor, _totalFileSize);
             }
             else
             {
@@ -196,18 +152,18 @@ namespace FileMover
         /// <summary>
         /// Handle a non success
         /// </summary>
-        /// <param name="success"></param>
+        /// <param name="successDescriptor"></param>
         /// <param name="fileSize"></param>
         /// <returns></returns>
-        private FileMoveProgressArgs HandleFailed(Tuple<bool, int> success, long fileSize)
+        private FileMoveProgressArgs HandleFailed(SuccessDescriptor successDescriptor, long fileSize)
         {
-            if (success.Item2 == CANCELLED_ERROR_CODE) //ie it failed because the user cancelled the execution we dont to thrown an exception
+            if (successDescriptor.ErrorCode == CANCELLED_ERROR_CODE) //ie it failed because the user cancelled the execution we dont to thrown an exception
             {
                 return new FileMoveProgressArgs(fileSize, 0);
             }
             else
             {
-                throw new Win32Exception(success.Item2);
+                throw new Win32Exception(successDescriptor.ErrorCode);
             }
         }
 
@@ -280,5 +236,63 @@ namespace FileMover
             bool cancelled,
             CopyFileFlags CopyFlags);
 
+
+        private class SuccessDescriptor
+        {
+            internal bool IsSuccess { get; private set; }
+            internal int ErrorCode { get; private set; }
+
+            internal SuccessDescriptor(bool isSucess, int errorCode)
+            {
+                IsSuccess = isSucess;
+                ErrorCode = errorCode;
+            }
+
+        }
+
+        /// <summary>
+        /// Describes the action that should be taken once control is returned back to FileMoveX in Win32Dll method after the update progress has been called
+        /// </summary>
+        enum CopyProgressResult : uint
+        {
+            PROGRESS_CONTINUE = 0,
+            PROGRESS_CANCEL = 1,
+            PROGRESS_STOP = 2,
+            PROGRESS_QUIET = 3
+        }
+
+        /// <summary>
+        /// The reason the callback was called from the FileMoveX method
+        /// </summary>
+        enum CopyProgressCallbackReason : uint
+        {
+            CALLBACK_CHUNK_FINISHED = 0x00000000,
+            CALLBACK_STREAM_SWITCH = 0x00000001
+        }
+
+        /// <summary>
+        /// Move Flags required for interaction with Win32 method
+        /// </summary>
+        [Flags]
+        enum MoveFileFlags : uint
+        {
+            MOVE_FILE_REPLACE_EXISTSING = 0x00000001,
+            MOVE_FILE_COPY_ALLOWED = 0x00000002,
+            MOVE_FILE_DELAY_UNTIL_REBOOT = 0x00000004,
+            MOVE_FILE_WRITE_THROUGH = 0x00000008,
+            MOVE_FILE_CREATE_HARDLINK = 0x00000010,
+            MOVE_FILE_FAIL_IF_NOT_TRACKABLE = 0x00000020
+        }
+
+        [Flags]
+        enum CopyFileFlags
+        {
+            COPY_FILE_ALLOW_DECRYPTED_DESTINATION = 0x00000008,
+            COPY_FILE_COPY_SYMLINK = 0x00000800,
+            COPY_FILE_FAIL_IF_EXISTS = 0x00000001,
+            COPY_FILE_NO_BUFFERING = 0x00001000,
+            COPY_FILE_OPEN_SOURCE_FOR_WRITE = 0x00000004,
+            COPY_FILE_RESTARTABLE = 0x00000002
+        }
     }
 }
